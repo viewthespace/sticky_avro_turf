@@ -26,14 +26,15 @@ Sticky AvroTurf follows the [`AvroTurf::Messaging` API](https://github.com/dasch
 require 'sticky_avro_turf'
 
 # TODO: Use role credentials instead of access keys and tokens
-avro = AvroTurf:GlueMessaging.new(
-  registry_name: 'registry-name',
-  access_key_id: 'test-access-key',
-  secret_access_key: 'test-secret',
-  session_token: 'test-token',
-  region: 'us-east-1',
-  schemas_path: 'spec/schemas',
-)
+avro =
+  AvroTurf :GlueMessaging.new(
+             registry_name: 'registry-name',
+             access_key_id: 'test-access-key',
+             secret_access_key: 'test-secret',
+             session_token: 'test-token',
+             region: 'us-east-1',
+             schemas_path: 'spec/schemas',
+           )
 
 # This method serializes the message with the schema version id
 # TODO: If the schema is not yet registered in the registry, then it will be

@@ -1,0 +1,27 @@
+{
+  "name": "person",
+  "type": "record",
+  "fields": [
+    {
+      "name": "full_name",
+      "type": "string"
+    },
+    {
+      "name": "address",
+      "type": {
+        "name": "address",
+        "type": "record",
+        "fields": [
+          {
+            "name": "street",
+            "type": "string"
+          },
+          {
+            "name": "city",
+            "type": "string"
+          }
+        ]
+      }
+    }
+  ]
+}
