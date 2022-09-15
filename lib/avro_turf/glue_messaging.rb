@@ -110,8 +110,6 @@ class AvroTurf
     # Decodes data into the original message.
     #
     # data        - A String containing encoded data.
-    # schema_name - The String name of the schema that should be used to decode
-    #               the data. Must match the schema used when encoding (optional).
     #
     # Returns the decoded message.
     def decode(data)
