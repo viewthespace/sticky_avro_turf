@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
-require 'avro_turf'
-require 'avro_turf/glue_schema_registry'
+require "avro_turf"
+require "avro_turf/glue_schema_registry"
 
 class AvroTurf
   class GlueMessaging
-    MAGIC_BYTE = [3].pack('C').freeze
-    COMPRESSION_ENABLED_BYTE = [5].pack('C').freeze
-    COMPRESSION_DISABLED_BYTE = [0].pack('C').freeze
+    MAGIC_BYTE = [3].pack("C").freeze
+    COMPRESSION_ENABLED_BYTE = [5].pack("C").freeze
+    COMPRESSION_DISABLED_BYTE = [0].pack("C").freeze
 
     class DecodedMessage
       attr_reader :schema_id, :message
@@ -18,32 +18,29 @@ class AvroTurf
       end
     end
 
+    attr_reader :schema_store
+    attr_reader :client
+    attr_reader :registry
+    attr_accessor :schemas_by_id
+
     # Instantiate a new Messaging instance with the given configuration.
     #
     # schema_store         - A schema store object that responds to #find(schema_name, namespace).
     # schemas_path         - The String file system path where local schemas are stored.
     # registry_name
-    # access_key_id
-    # secret_access_key
-    # session_token
-    # region
+    # client
     def initialize(
       registry_name: nil,
-      access_key_id: nil,
-      secret_access_key: nil,
-      session_token: nil,
-      region: nil,
       schema_store: nil,
-      schemas_path: nil
+      schemas_path: nil,
+      client: Aws::Glue::Client.new
     )
       @schema_store = schema_store || SchemaStore.new(path: schemas_path || DEFAULT_SCHEMAS_PATH)
+      @client = client
       @registry =
-        GlueSchemaRegistry.new(
+        AvroTurf::GlueSchemaRegistry.new(
           registry_name: registry_name,
-          access_key_id: access_key_id,
-          secret_access_key: secret_access_key,
-          session_token: session_token,
-          region: region,
+          client: client
         )
       @schemas_by_id = {}
     end
@@ -62,7 +59,7 @@ class AvroTurf
     #
     # Returns the encoded data as a String.
     def encode(message, schema_name: nil, schema_id: nil, validate: true)
-      writers_schema = @schema_store.find(schema_name)
+      writers_schema = schema_store.find(schema_name)
       schema, schema_id =
         if schema_id
           fetch_schema_by_id(schema_id)
@@ -70,8 +67,8 @@ class AvroTurf
           fetch_schema_by_definition(writers_schema, schema_name)
         else
           raise ArgumentError.new(
-                  'Neither schema_name nor schema_id nor schema_name + schema definition provided to determine the schema.',
-                )
+            "Neither schema_name nor schema_id nor schema_name + schema definition provided to determine the schema."
+          )
         end
 
       if validate
@@ -80,7 +77,7 @@ class AvroTurf
           message,
           recursive: true,
           encoded: false,
-          fail_on_extra_fields: true,
+          fail_on_extra_fields: true
         )
       end
 
@@ -99,7 +96,7 @@ class AvroTurf
       encoder.write(COMPRESSION_DISABLED_BYTE)
 
       # The schema id is encoded as a 32-bit hex string.
-      encoder.write([schema_id.gsub('-', '')].pack('H*'))
+      encoder.write([schema_id.delete("-")].pack("H*"))
 
       # The actual message comes last.
       writer.write(message, encoder)
@@ -138,19 +135,19 @@ class AvroTurf
 
       # The schema id is a 32-bit hex string.
       schema_id =
-        decoder.read(16).unpack1('H*').sub(/(.{8})(.{4})(.{4})(.{4})(.{12})/, '\1-\2-\3-\4-\5')
+        decoder.read(16).unpack1("H*").sub(/(.{8})(.{4})(.{4})(.{4})(.{12})/, '\1-\2-\3-\4-\5')
 
       writers_schema =
-        @schemas_by_id.fetch(schema_id) do
+        schemas_by_id.fetch(schema_id) do
           schema, schema_id = fetch_schema_by_id(schema_id)
-          @schemas_by_id[schema_id] = schema
+          schemas_by_id[schema_id] = schema
         end
 
       reader = Avro::IO::DatumReader.new(writers_schema, nil)
       message = reader.read(decoder)
 
       if compression_byte == COMPRESSION_ENABLED_BYTE
-        p 'Do some decompression here'
+        p "Do some decompression here"
       elsif compression_byte != COMPRESSION_DISABLED_BYTE
         raise "Compression byte is not recognized, got `#{compression_byte.inspect}`"
       end
@@ -161,22 +158,22 @@ class AvroTurf
     # Fetch the schema from registry with the provided schema_id.
     def fetch_schema_by_id(schema_id)
       schema =
-        @schemas_by_id.fetch(schema_id) do
-          schema_json = @registry.fetch(schema_id)
+        schemas_by_id.fetch(schema_id) do
+          schema_json = registry.fetch(schema_id)
           Avro::Schema.parse(schema_json)
         end
       [schema, schema_id]
     end
 
     def fetch_schema_by_definition(schema, subject)
-      schema_id = @registry.fetch_by_definition(subject, schema)
+      schema_id = registry.fetch_by_definition(subject, schema)
       [schema, schema_id]
     end
 
     # Schemas are registered under the full name of the top level Avro record
     # type, or `subject` if it's provided.
     def register_schema(schema_name:, subject: nil)
-      raise NotImplementedError
+      registry.register(schema_name, subject)
     end
   end
 end
